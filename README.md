@@ -1,6 +1,6 @@
 # Discord Bot Test
 
-A feature-rich Discord bot built with **Discord.js v14**, featuring YouTube music playback, local AI integration (via Ollama), interactive vote kicks, automated reminders, server moderation commands, and customizable presence settings.
+A feature-rich Discord bot built with **Discord.js v14**, featuring YouTube music playback, local AI integration (via Ollama), interactive vote kicks, Tic-Tac-Toe, automated reminders, server moderation commands, and customizable presence settings.
 
 ---
 
@@ -22,6 +22,15 @@ A feature-rich Discord bot built with **Discord.js v14**, featuring YouTube musi
 - **Smart Voting Logic:** Automatically calculates required votes (passes when at least 1/3 of non-bot, eligible server members vote "Yes").
 - **Dynamic Embeds:** Real-time updates to the voting panel showing voters, counts, and remaining time.
 - **Auto-Cleanup:** Votes automatically expire and clear out after 1 hour if not resolved.
+
+### ⭕ Tic-Tac-Toe (`/tictactoe`)
+- **Human vs Human:** `/tictactoe challenge opponent:@user` — Accept / Decline challenge flow.
+- **Human vs AI:** `/tictactoe ai [difficulty]` — play against **🤖 Ollama AI** (starts immediately).
+- **Difficulty:** `easy` (random, no Ollama), `normal` (Ollama), `hard` (Ollama with a stronger prompt).
+- **Interactive board:** Buttons with turn validation, win/draw detection, and a 60-second move timeout (humans only).
+- **Resilient AI:** Invalid Ollama replies are retried, then fall back to a random legal move so games never stall.
+- **Concurrent games:** Multiple games at once; each human may only be in one challenge or game at a time.
+- **Modular engine:** Discord-agnostic core in `games/tictactoe/`; AI is an `OllamaPlayer` extension, not a fork of the engine.
 
 ### ⏰ Self Reminders (`/remind`)
 - **Timed Notifications:** Schedule reminders with pre-configured intervals ranging from 5 minutes up to 1 day.
@@ -120,7 +129,19 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 │   ├── resume.js          # /resume command (resume playback)
 │   ├── skip.js            # /skip command (skip current song)
 │   ├── stop.js            # /stop command (stop and clear queue)
+│   ├── tictactoe.js       # /tictactoe command (Human vs Human)
 │   └── votekick.js        # /votekick command (vote to kick a user)
+├── games/
+│   └── tictactoe/
+│       ├── constants.js   # Marks, statuses, timeouts, difficulty
+│       ├── Game.js        # Discord-agnostic board engine
+│       ├── GameManager.js # Challenges, direct games, cleanup
+│       ├── prompts.js     # Ollama move / retry / personality prompts
+│       ├── index.js       # Public exports
+│       └── players/
+│           ├── Player.js       # Shared player shape
+│           ├── HumanPlayer.js  # Discord human
+│           └── OllamaPlayer.js # AI opponent (reuses ../ollama.js)
 ├── utils/
 │   ├── autoLeave.js       # Auto-leave voice channel when empty
 │   ├── voice.js           # Voice channel connection helpers
@@ -150,6 +171,8 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 | `/leave` | Stop music and leave the voice channel. | None |
 | `/chat <message>` | Interacts with a local LLM via Ollama. | None |
 | `/votekick <target> [reason]` | Initiates a vote to kick a user from the server. | None |
+| `/tictactoe challenge <opponent>` | Challenge a user to Tic-Tac-Toe (Accept / Decline). | None |
+| `/tictactoe ai [difficulty]` | Play against 🤖 Ollama AI (`easy` / `normal` / `hard`). | None |
 | `/remind <when> <message>` | Set a reminder (Choices: 5m, 15m, 30m, 1h, 2h, 4h, 8h, 12h, 1d). | None |
 | `/kick <target> [reason]` | Kicks the target member from the server. | Kick Members |
 | `/ban <target> [reason]` | Bans the target member from the server. | Ban Members |

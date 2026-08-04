@@ -134,14 +134,17 @@ client.on(Events.InteractionCreate, async interaction => {
       }
     }
 
-    const votekick = client.commands.get('votekick');
-    if (votekick?.handleButton) {
+    const buttonCommands = ['votekick', 'tictactoe'];
+    for (const name of buttonCommands) {
+      const command = client.commands.get(name);
+      if (!command?.handleButton) continue;
+
       try {
-        const handled = await votekick.handleButton(interaction);
+        const handled = await command.handleButton(interaction);
         if (handled) return;
       } catch (error) {
         console.error(error);
-        const payload = { content: 'There was an error processing your vote.', ephemeral: true };
+        const payload = { content: 'There was an error processing that button.', ephemeral: true };
         if (interaction.replied || interaction.deferred) {
           await interaction.followUp(payload).catch(() => {});
         } else {
