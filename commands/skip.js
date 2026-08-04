@@ -2,6 +2,10 @@ const { SlashCommandBuilder } = require('discord.js');
 const musicManager = require('../musicManager');
 
 module.exports = {
+    category: 'music',
+    usage: '/skip',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('skip')
         .setDescription('Skip the current song'),

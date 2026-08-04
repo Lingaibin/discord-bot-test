@@ -115,6 +115,18 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+  if (interaction.isAutocomplete()) {
+    const command = client.commands.get(interaction.commandName);
+    if (!command?.autocomplete) return;
+
+    try {
+      await command.autocomplete(interaction);
+    } catch (error) {
+      console.error(error);
+    }
+    return;
+  }
+
   if (interaction.isButton()) {
     if (interaction.customId === 'reset_chat_memory') {
       const chatMemory = require('./memory');

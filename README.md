@@ -119,6 +119,7 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 ├── commands/
 │   ├── ban.js             # /ban command (requires Ban Members permissions)
 │   ├── chat.js            # /chat command (Ollama AI interaction)
+│   ├── help.js            # /help command (dynamic command list)
 │   ├── kick.js            # /kick command (requires Kick Members permissions)
 │   ├── leave.js           # /leave command (disconnect from voice)
 │   ├── pause.js           # /pause command (pause playback)
@@ -176,4 +177,5 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 | `/remind <when> <message>` | Set a reminder (Choices: 5m, 15m, 30m, 1h, 2h, 4h, 8h, 12h, 1d). | None |
 | `/kick <target> [reason]` | Kicks the target member from the server. | Kick Members |
 | `/ban <target> [reason]` | Bans the target member from the server. | Ban Members |
+| `/help [command]` | Lists all slash commands by category, or details for one command. | None |
 | `/ping` | Displays bot latency and API latency. | None |

@@ -1,6 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
+    category: 'moderation',
+    usage: '/kick <target> [reason]',
+    permissions: 'Kick Members',
+
     data: new SlashCommandBuilder()
     .setName('kick')
     .setDescription('Kick a user from the server')

@@ -2,6 +2,10 @@ const { SlashCommandBuilder } = require('discord.js');
 const musicManager = require('../musicManager');
 
 module.exports = {
+    category: 'music',
+    usage: '/pause',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('pause')
         .setDescription('Pause the current song'),

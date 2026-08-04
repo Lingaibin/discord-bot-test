@@ -349,6 +349,10 @@ async function renderAfterAiMove(client, session, game, moveInfo) {
 }
 
 module.exports = {
+    category: 'games',
+    usage: '/tictactoe <challenge|ai>',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('tictactoe')
         .setDescription('Play Tic-Tac-Toe against a friend or Ollama AI')

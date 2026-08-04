@@ -4,6 +4,10 @@ const musicManager = require('../musicManager');
 const { clearAutoLeaveTimer } = require('../utils/autoLeave');
 
 module.exports = {
+    category: 'music',
+    usage: '/leave',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('leave')
         .setDescription('Stops the music and leaves the voice channel'),

@@ -7,6 +7,10 @@ const { resolveVideo } = require('../utils/youtube');
 const { connectToChannel } = require('../utils/voice');
 
 module.exports = {
+    category: 'music',
+    usage: '/play <query>',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('play')
         .setDescription('Play music from YouTube')

@@ -3,6 +3,10 @@ const ollama = require("../ollama");
 const chatMemory = require("../memory");
 
 module.exports = {
+  category: 'ai',
+  usage: '/chat <message>',
+  permissions: 'None',
+
   data: new SlashCommandBuilder()
     .setName("chat")
     .setDescription("Talk with local AI")

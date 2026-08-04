@@ -2,6 +2,10 @@ const { SlashCommandBuilder } = require('discord.js');
 const musicManager = require('../musicManager');
 
 module.exports = {
+    category: 'music',
+    usage: '/queue',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('queue')
         .setDescription('Show current queue'),

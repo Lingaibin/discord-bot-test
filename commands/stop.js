@@ -4,6 +4,10 @@ const musicManager = require('../musicManager');
 const { clearAutoLeaveTimer } = require('../utils/autoLeave');
 
 module.exports = {
+    category: 'music',
+    usage: '/stop',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('stop')
         .setDescription('Stop playback and clear queue'),

@@ -1,6 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 module.exports = {
+    category: 'moderation',
+    usage: '/ban <target> [reason]',
+    permissions: 'Ban Members',
+
     data: new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Ban a user from the server')

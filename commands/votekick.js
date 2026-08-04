@@ -115,6 +115,10 @@ async function finalizeVote(interaction, voteId, status, { kick = false } = {}) 
 }
 
 module.exports = {
+    category: 'moderation',
+    usage: '/votekick <target> [reason]',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('votekick')
         .setDescription('Start a vote to kick a user (passes at ~1/3 of non-bot members voting yes)')

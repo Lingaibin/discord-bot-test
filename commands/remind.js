@@ -17,6 +17,10 @@ const WHEN_CHOICES = [
 const whenByValue = new Map(WHEN_CHOICES.map((choice) => [choice.value, choice]));
 
 module.exports = {
+    category: 'utility',
+    usage: '/remind <when> <message>',
+    permissions: 'None',
+
     data: new SlashCommandBuilder()
         .setName('remind')
         .setDescription('Set a reminder for yourself')
