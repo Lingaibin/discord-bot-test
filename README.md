@@ -26,9 +26,9 @@ A feature-rich Discord bot built with **Discord.js v14**, featuring YouTube musi
 ### ⭕ Tic-Tac-Toe (`/tictactoe`)
 - **Human vs Human:** `/tictactoe challenge opponent:@user` — Accept / Decline challenge flow.
 - **Human vs AI:** `/tictactoe ai [difficulty]` — play against **🤖 Ollama AI** (starts immediately).
-- **Difficulty:** `easy` (random, no Ollama), `normal` (Ollama), `hard` (Ollama with a stronger prompt).
+- **Difficulty:** `easy` (random, no Ollama), `normal` (Ollama picks the move), `hard` (minimax — unbeatable; Ollama only adds an in-character comment).
 - **Interactive board:** Buttons with turn validation, win/draw detection, and a 60-second move timeout (humans only).
-- **Resilient AI:** Invalid Ollama replies are retried, then fall back to a random legal move so games never stall.
+- **Resilient AI:** On `normal`, invalid Ollama replies are retried, then fall back to a random legal move so games never stall. `hard` never needs a fallback since minimax always returns a valid move.
 - **Concurrent games:** Multiple games at once; each human may only be in one challenge or game at a time.
 - **Modular engine:** Discord-agnostic core in `games/tictactoe/`; AI is an `OllamaPlayer` extension, not a fork of the engine.
 
@@ -137,7 +137,8 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 │       ├── constants.js   # Marks, statuses, timeouts, difficulty
 │       ├── Game.js        # Discord-agnostic board engine
 │       ├── GameManager.js # Challenges, direct games, cleanup
-│       ├── prompts.js     # Ollama move / retry / personality prompts
+│       ├── minimax.js     # Unbeatable move search for hard difficulty
+│       ├── prompts.js     # Ollama move / retry / comment prompts
 │       ├── index.js       # Public exports
 │       └── players/
 │           ├── Player.js       # Shared player shape
@@ -173,7 +174,7 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 | `/chat <message>` | Interacts with a local LLM via Ollama. | None |
 | `/votekick <target> [reason]` | Initiates a vote to kick a user from the server. | None |
 | `/tictactoe challenge <opponent>` | Challenge a user to Tic-Tac-Toe (Accept / Decline). | None |
-| `/tictactoe ai [difficulty]` | Play against 🤖 Ollama AI (`easy` / `normal` / `hard`). | None |
+| `/tictactoe ai [difficulty]` | Play against 🤖 Ollama AI (`easy` / `normal` / `hard`, unbeatable). | None |
 | `/remind <when> <message>` | Set a reminder (Choices: 5m, 15m, 30m, 1h, 2h, 4h, 8h, 12h, 1d). | None |
 | `/kick <target> [reason]` | Kicks the target member from the server. | Kick Members |
 | `/ban <target> [reason]` | Bans the target member from the server. | Ban Members |

@@ -379,7 +379,7 @@ module.exports = {
                         .addChoices(
                             { name: 'Easy (random)', value: DIFFICULTY.EASY },
                             { name: 'Normal (Ollama)', value: DIFFICULTY.NORMAL },
-                            { name: 'Hard (Ollama)', value: DIFFICULTY.HARD },
+                            { name: 'Hard (Unbeatable)', value: DIFFICULTY.HARD },
                         ),
                 ),
         ),

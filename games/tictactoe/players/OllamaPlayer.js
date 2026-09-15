@@ -8,9 +8,10 @@ const { MARK, DIFFICULTY, AI_DISPLAY_NAME, DEFAULT_OLLAMA_MODEL, OLLAMA_MOVE_TIM
 const {
     getAvailablePositions,
     buildMovePrompt,
+    buildCommentPrompt,
     buildRetryPrompt,
-    buildPersonalityPrompt,
 } = require('../prompts');
+const { getBestMove } = require('../minimax');
 
 /**
  * AI opponent backed by the shared Ollama client.
@@ -47,7 +48,7 @@ class OllamaPlayer extends Player {
      * @param {'X'|'O'} mark
      * @returns {Promise<{
      *   position: number,
-     *   source: 'random'|'ollama'|'fallback',
+     *   source: 'random'|'ollama'|'minimax'|'fallback',
      *   notice?: string,
      *   comment?: string|null,
      * }>}
@@ -65,10 +66,14 @@ class OllamaPlayer extends Player {
             };
         }
 
+        if (this.difficulty === DIFFICULTY.HARD) {
+            return this.#getHardMove(board, mark);
+        }
+
         try {
-            let position = await this.#requestPosition(board, mark, available, false);
+            let { position, comment } = await this.#requestMove(board, mark, available, false);
             if (!isValidMove(position, available)) {
-                position = await this.#requestPosition(board, mark, available, true);
+                ({ position, comment } = await this.#requestMove(board, mark, available, true));
             }
 
             if (!isValidMove(position, available)) {
@@ -79,12 +84,7 @@ class OllamaPlayer extends Player {
                 };
             }
 
-            let comment = null;
-            if (this.personality) {
-                comment = await this.#requestComment(board, mark, position).catch(() => null);
-            }
-
-            return { position, source: 'ollama', comment };
+            return { position, source: 'ollama', comment: this.personality ? comment : null };
         } catch (error) {
             console.error('OllamaPlayer.getMove failed:', error);
             return {
@@ -96,45 +96,44 @@ class OllamaPlayer extends Player {
     }
 
     /**
+     * Hard mode: the move is always the minimax-optimal one (never loses).
+     * Ollama is only asked for a short in-character comment about it.
+     *
      * @param {(null|'X'|'O')[]} board
      * @param {'X'|'O'} mark
-     * @param {number[]} available
-     * @param {boolean} retry
-     * @returns {Promise<number|null>}
+     * @returns {Promise<{ position: number, source: 'minimax', comment: string|null }>}
      */
-    async #requestPosition(board, mark, available, retry) {
-        const prompt = retry
-            ? buildRetryPrompt(available)
-            : buildMovePrompt(mark, this.difficulty, board);
+    async #getHardMove(board, mark) {
+        const position = getBestMove(board, mark);
 
-        const content = await this.#chat(prompt);
-        return parsePosition(content);
+        if (!this.personality) {
+            return { position, source: 'minimax', comment: null };
+        }
+
+        try {
+            const content = await this.#chat(buildCommentPrompt(mark, board, position));
+            return { position, source: 'minimax', comment: cleanComment(content) };
+        } catch (error) {
+            console.error('OllamaPlayer hard-mode comment failed:', error);
+            return { position, source: 'minimax', comment: null };
+        }
     }
 
     /**
      * @param {(null|'X'|'O')[]} board
      * @param {'X'|'O'} mark
-     * @param {number} position
-     * @returns {Promise<string|null>}
+     * @param {number[]} available
+     * @param {boolean} retry
+     * @returns {Promise<{ position: number|null, comment: string|null }>}
      */
-    async #requestComment(board, mark, position) {
-        const nextBoard = [...board];
-        nextBoard[position] = mark;
-        const content = await this.#chat(buildPersonalityPrompt(mark, nextBoard, position));
-        if (!content) return null;
+    async #requestMove(board, mark, available, retry) {
+        const prompt = retry
+            ? buildRetryPrompt(available)
+            : buildMovePrompt(mark, board);
 
-        const cleaned = content
-            .replace(/^["'`]+|["'`]+$/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        if (!cleaned) return null;
-
-        const words = cleaned.split(' ');
-        if (words.length > 15) {
-            return words.slice(0, 15).join(' ');
-        }
-        return cleaned.slice(0, 120);
+        const content = await this.#chat(prompt);
+        console.debug('OllamaPlayer received content:', content);
+        return parseMoveReply(content);
     }
 
     /**
@@ -142,6 +141,7 @@ class OllamaPlayer extends Player {
      * @returns {Promise<string>}
      */
     async #chat(prompt) {
+        console.log('OllamaPlayer sending prompt to Ollama:', prompt);
         const response = await withTimeout(
             ollama.chat({
                 model: this.model,
@@ -152,20 +152,50 @@ class OllamaPlayer extends Player {
             'Ollama request timed out',
         );
 
+        console.debug('OllamaPlayer chat response:', response);
         return String(response?.message?.content ?? '').trim();
     }
 }
 
 /**
+ * Parse a "{i}, xxxxx" reply into a position and an optional comment.
+ * Falls back to grabbing the first number if the model ignores the format.
+ *
  * @param {string} text
- * @returns {number|null}
+ * @returns {{ position: number|null, comment: string|null }}
  */
-function parsePosition(text) {
-    if (!text) return null;
-    const match = String(text).trim().match(/-?\d+/);
-    if (!match) return null;
-    const value = Number(match[0]);
-    return Number.isInteger(value) ? value : null;
+function parseMoveReply(text) {
+    if (!text) return { position: null, comment: null };
+    const str = String(text).trim();
+
+    const match = str.match(/^(-?\d+)\s*,\s*([\s\S]*)$/);
+    if (match) {
+        return { position: Number(match[1]), comment: cleanComment(match[2]) };
+    }
+
+    const numberOnly = str.match(/-?\d+/);
+    return {
+        position: numberOnly ? Number(numberOnly[0]) : null,
+        comment: null,
+    };
+}
+
+/**
+ * @param {string} text
+ * @returns {string|null}
+ */
+function cleanComment(text) {
+    const cleaned = String(text)
+        .replace(/^["'`]+|["'`]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (!cleaned) return null;
+
+    const words = cleaned.split(' ');
+    if (words.length > 15) {
+        return words.slice(0, 15).join(' ');
+    }
+    return cleaned.slice(0, 120);
 }
 
 /**
