@@ -215,4 +215,8 @@ module.exports = {
     resume(guildId) {
         return guilds.get(guildId)?.player.unpause() ?? false;
     },
+
+    isPaused(guildId) {
+        return guilds.get(guildId)?.player.state.status === AudioPlayerStatus.Paused;
+    },
 };

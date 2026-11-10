@@ -11,6 +11,7 @@ A feature-rich Discord bot built with **Discord.js v14**, featuring YouTube musi
 - **Queue support:** Songs are queued and played in order. Each server has its own queue and player.
 - **Playlists & Mixes:** A link with `list=` queues up to 25 songs, starting from the video you clicked (works for playlists and YouTube Mixes). Private or invalid lists fall back to the single video.
 - **Queue controls:** Loop the current song or the whole queue, shuffle Up Next, or remove a song by its number in `/queue`. `/skip` still moves on while a song is looping.
+- **Control buttons:** `/play` and `/nowplaying` replies have ⏯️ pause/resume, ⏭️ skip, ⏹️ stop and 🔁 loop (cycles off → song → queue) buttons. Each one does the same thing as its slash command.
 - **Auto-leave:** The bot leaves the voice channel 60 seconds after the last human member leaves.
 - **Powered by yt-dlp:** Audio is streamed via [yt-dlp](https://github.com/yt-dlp/yt-dlp) and transcoded to Opus for Discord voice. The binary downloads automatically to `bin/` on first play and updates to the latest release each time the bot starts. On macOS the bot uses yt-dlp's unpacked build (`bin/yt-dlp_macos/`), which starts in ~0.2 s instead of ~7.5 s; other platforms use the single-file `bin/yt-dlp` (or set `YT_DLP_PATH` to use a system install, which you must keep up to date yourself). Node.js is passed to yt-dlp as its JavaScript runtime, which YouTube now requires.
 

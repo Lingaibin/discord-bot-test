@@ -146,7 +146,7 @@ client.on(Events.InteractionCreate, async interaction => {
       }
     }
 
-    const buttonCommands = ['votekick', 'tictactoe'];
+    const buttonCommands = ['votekick', 'tictactoe', 'play'];
     for (const name of buttonCommands) {
       const command = client.commands.get(name);
       if (!command?.handleButton) continue;

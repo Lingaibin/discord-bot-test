@@ -6,6 +6,18 @@ const MESSAGES = {
     song: '🔂 Looping the current song. /skip still moves to the next one.',
     queue: '🔁 Looping the whole queue.',
 };
+const MODES = Object.keys(MESSAGES);
+
+async function setMode(interaction, mode) {
+    if (!musicManager.setLoop(interaction.guild.id, mode)) {
+        return interaction.reply({
+            content: 'Nothing is playing. Start a song with /play first.',
+            ephemeral: true,
+        });
+    }
+
+    await interaction.reply(MESSAGES[mode]);
+}
 
 module.exports = {
     category: 'music',
@@ -26,16 +38,13 @@ module.exports = {
                     { name: 'Whole queue', value: 'queue' },
                 )),
 
-    async execute(interaction) {
-        const mode = interaction.options.getString('mode');
+    execute(interaction) {
+        return setMode(interaction, interaction.options.getString('mode'));
+    },
 
-        if (!musicManager.setLoop(interaction.guild.id, mode)) {
-            return interaction.reply({
-                content: 'Nothing is playing. Start a song with /play first.',
-                ephemeral: true,
-            });
-        }
-
-        await interaction.reply(MESSAGES[mode]);
+    // 🔁 button: off -> song -> queue -> off.
+    cycle(interaction) {
+        const current = MODES.indexOf(musicManager.getLoop(interaction.guild.id));
+        return setMode(interaction, MODES[(current + 1) % MODES.length]);
     },
 };

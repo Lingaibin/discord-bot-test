@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const musicManager = require('../musicManager');
+const { controls } = require('./play');
 
 function formatTime(ms) {
     const seconds = Math.floor(ms / 1000);
@@ -30,10 +31,12 @@ module.exports = {
         // Live streams have no length, so show only the time played.
         const time = song.durationSec ? `${elapsed} / ${formatTime(song.durationSec * 1000)}` : `${elapsed} played`;
 
-        await interaction.reply(
-            `🎶 Now Playing\n**${song.title}**\n${song.url}\n` +
-            `⏱️ ${time} · ` +
-            `Requested by ${song.requestedBy} · Loop: ${musicManager.getLoop(guildId)}`
-        );
+        await interaction.reply({
+            content:
+                `🎶 Now Playing\n**${song.title}**\n${song.url}\n` +
+                `⏱️ ${time} · ` +
+                `Requested by ${song.requestedBy} · Loop: ${musicManager.getLoop(guildId)}`,
+            components: [controls],
+        });
     },
 };
