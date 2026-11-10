@@ -28,7 +28,7 @@ function leaveVoiceChannel(guildId) {
         return;
     }
 
-    musicManager.clear();
+    musicManager.clear(guildId);
     connection.destroy();
     clearAutoLeaveTimer(guildId);
     console.log(`[voice:${guildId}] auto-left empty channel`);

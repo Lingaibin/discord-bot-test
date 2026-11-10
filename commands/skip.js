@@ -12,7 +12,7 @@ module.exports = {
 
     async execute(interaction) {
         const currentSong =
-            musicManager.getCurrentSong();
+            musicManager.getCurrentSong(interaction.guild.id);
 
         if (!currentSong) {
             return interaction.reply({
@@ -21,7 +21,7 @@ module.exports = {
             });
         }
 
-        musicManager.skip();
+        musicManager.skip(interaction.guild.id);
 
         await interaction.reply(
             `⏭️ Skipped **${currentSong.title}**`

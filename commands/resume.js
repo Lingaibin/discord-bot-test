@@ -11,7 +11,7 @@ module.exports = {
         .setDescription('Resume playback'),
 
     async execute(interaction) {
-        const resumed = musicManager.resume();
+        const resumed = musicManager.resume(interaction.guild.id);
 
         if (!resumed) {
             return interaction.reply({

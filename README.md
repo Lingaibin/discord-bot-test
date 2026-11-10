@@ -6,11 +6,13 @@ A feature-rich Discord bot built with **Discord.js v14**, featuring YouTube musi
 
 ## 🚀 Features
 
-### 🎵 Music Playback (`/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/leave`)
+### 🎵 Music Playback (`/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/nowplaying`, `/shuffle`, `/loop`, `/remove`, `/leave`)
 - **YouTube streaming:** Play music from a YouTube URL or search term.
-- **Queue support:** Songs are queued and played in order.
+- **Queue support:** Songs are queued and played in order. Each server has its own queue and player.
+- **Playlists & Mixes:** A link with `list=` queues up to 25 songs, starting from the video you clicked (works for playlists and YouTube Mixes). Private or invalid lists fall back to the single video.
+- **Queue controls:** Loop the current song or the whole queue, shuffle Up Next, or remove a song by its number in `/queue`. `/skip` still moves on while a song is looping.
 - **Auto-leave:** The bot leaves the voice channel 60 seconds after the last human member leaves.
-- **Powered by yt-dlp:** Audio is streamed via [yt-dlp](https://github.com/yt-dlp/yt-dlp) and transcoded to Opus for Discord voice. The binary downloads automatically to `bin/yt-dlp` on first play (or set `YT_DLP_PATH` to use a system install).
+- **Powered by yt-dlp:** Audio is streamed via [yt-dlp](https://github.com/yt-dlp/yt-dlp) and transcoded to Opus for Discord voice. The binary downloads automatically to `bin/` on first play and updates to the latest release each time the bot starts. On macOS the bot uses yt-dlp's unpacked build (`bin/yt-dlp_macos/`), which starts in ~0.2 s instead of ~7.5 s; other platforms use the single-file `bin/yt-dlp` (or set `YT_DLP_PATH` to use a system install, which you must keep up to date yourself). Node.js is passed to yt-dlp as its JavaScript runtime, which YouTube now requires.
 
 ### 🤖 Local AI Chat (`/chat`)
 - **Interactive AI Chat:** Have conversations directly with a local AI model (defaults to `llama3`) running on your machine via [Ollama](https://ollama.com/).
@@ -74,7 +76,7 @@ BOT_STATUS=online
 ACTIVITY_TYPE=WATCHING
 ACTIVITY_NAME="over the server"
 
-# Optional: path to a system yt-dlp binary (defaults to bin/yt-dlp, auto-downloaded on first play)
+# Optional: path to a system yt-dlp binary (defaults to the auto-downloaded copy in bin/)
 # YT_DLP_PATH=/usr/local/bin/yt-dlp
 ```
 > **How to get credentials:**
@@ -109,7 +111,7 @@ Upon launching, the bot will:
 2. Automatically deploy/register the slash commands globally to Discord.
 3. Update its status and presence based on your `.env` configuration.
 
-On the first `/play` command, the bot will download the `yt-dlp` binary into `bin/yt-dlp` (this is gitignored and only needs to happen once per machine).
+On the first `/play` command, the bot will download yt-dlp into `bin/` (`bin/yt-dlp_macos/` on macOS, `bin/yt-dlp` elsewhere). It is gitignored, and the bot checks for a newer release on every start.
 
 ---
 
@@ -122,12 +124,16 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 │   ├── help.js            # /help command (dynamic command list)
 │   ├── kick.js            # /kick command (requires Kick Members permissions)
 │   ├── leave.js           # /leave command (disconnect from voice)
+│   ├── loop.js            # /loop command (repeat song or queue)
+│   ├── nowplaying.js      # /nowplaying command (current song, time, loop mode)
 │   ├── pause.js           # /pause command (pause playback)
 │   ├── ping.js            # /ping command (bot latency stats)
 │   ├── play.js            # /play command (YouTube music)
 │   ├── queue.js           # /queue command (show current queue)
 │   ├── remind.js          # /remind command (set individual reminders)
+│   ├── remove.js          # /remove command (remove a song from Up Next)
 │   ├── resume.js          # /resume command (resume playback)
+│   ├── shuffle.js         # /shuffle command (shuffle Up Next)
 │   ├── skip.js            # /skip command (skip current song)
 │   ├── stop.js            # /stop command (stop and clear queue)
 │   ├── tictactoe.js       # /tictactoe command (Human vs Human)
@@ -149,10 +155,11 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 │   ├── voice.js           # Voice channel connection helpers
 │   └── youtube.js         # YouTube search & streaming (yt-dlp + ffmpeg)
 ├── bin/
-│   └── yt-dlp             # yt-dlp binary (auto-downloaded, gitignored)
+│   ├── yt-dlp_macos/      # yt-dlp unpacked build, macOS (auto-downloaded, gitignored)
+│   └── yt-dlp             # yt-dlp single-file binary, other platforms (auto-downloaded, gitignored)
 ├── index.js               # Main entry point & event handlers
 ├── memory.js              # In-memory storage for AI chat conversations
-├── musicManager.js        # Music queue and audio player
+├── musicManager.js        # Per-server music queues and audio players
 ├── ollama.js              # Ollama API client configuration
 ├── polyfills.js           # Node.js polyfills
 └── package.json           # Dependencies and project scripts
@@ -164,12 +171,16 @@ On the first `/play` command, the bot will download the `yt-dlp` binary into `bi
 
 | Command | Description | Permissions Required |
 | :--- | :--- | :--- |
-| `/play <query>` | Play music from a YouTube URL or search term. | None (must be in a voice channel) |
+| `/play <query>` | Play music from a YouTube URL or search term. Playlist/Mix links queue up to 25 songs from the clicked video. | None (must be in a voice channel) |
 | `/pause` | Pause the current song. | None |
 | `/resume` | Resume playback. | None |
 | `/skip` | Skip the current song. | None |
 | `/stop` | Stop playback and clear the queue. | None |
 | `/queue` | Show the current song and upcoming queue. | None |
+| `/nowplaying` | Show the current song, time played, requester and loop mode. | None |
+| `/shuffle` | Shuffle the songs in Up Next. | None |
+| `/loop <mode>` | Repeat nothing (`off`), the current `song`, or the whole `queue`. | None |
+| `/remove <position>` | Remove a song from Up Next by its number in `/queue`. | None |
 | `/leave` | Stop music and leave the voice channel. | None |
 | `/chat <message>` | Interacts with a local LLM via Ollama. | None |
 | `/votekick <target> [reason]` | Initiates a vote to kick a user from the server. | None |

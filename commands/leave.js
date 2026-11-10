@@ -19,7 +19,7 @@ module.exports = {
             return interaction.reply({ content: 'I am not in a voice channel!', ephemeral: true });
         }
 
-        musicManager.clear();
+        musicManager.clear(interaction.guild.id);
         clearAutoLeaveTimer(interaction.guild.id);
         connection.destroy();
 

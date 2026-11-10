@@ -4,14 +4,25 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const { promisify } = require('util');
+const { PassThrough } = require('stream');
 const { StreamType } = require('@discordjs/voice');
 const ffmpegPath = require('ffmpeg-static');
 const YTDlpWrap = require('yt-dlp-wrap').default;
 const ytSearch = require('yt-search');
 
-const YT_DLP_BIN = process.env.YT_DLP_PATH || path.join(__dirname, '..', 'bin', 'yt-dlp');
-let ytDlpWrap;
+const execFileAsync = promisify(execFile);
+const BIN_DIR = path.join(__dirname, '..', 'bin');
+const YT_DLP_BIN = process.env.YT_DLP_PATH || path.join(BIN_DIR, 'yt-dlp');
+
+// macOS: the single-file yt-dlp unpacks itself on every run and macOS security-scans the fresh files,
+// costing ~7.5 s per run. The unpacked .zip build starts in ~0.2 s but can't self-update (-U),
+// so setupMacYtDlp() updates it itself.
+const MAC_DIR = path.join(BIN_DIR, 'yt-dlp_macos');
+const MAC_EXE = path.join(MAC_DIR, 'yt-dlp_macos');
+
+let ytDlpReady;
 
 function getYtDlpAssetName() {
     if (process.env.YT_DLP_PATH) {
@@ -19,8 +30,6 @@ function getYtDlpAssetName() {
     }
 
     switch (os.platform()) {
-        case 'darwin':
-            return 'yt-dlp_macos';
         case 'win32':
             return 'yt-dlp.exe';
         default:
@@ -80,18 +89,17 @@ function isYouTubeUrl(input) {
     return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(input);
 }
 
-async function ensureYtDlp() {
-    if (ytDlpWrap) {
-        return ytDlpWrap;
-    }
-
+async function setupYtDlp() {
     if (process.env.YT_DLP_PATH) {
         if (!fs.existsSync(process.env.YT_DLP_PATH)) {
             throw new Error(`YT_DLP_PATH does not exist: ${process.env.YT_DLP_PATH}`);
         }
 
-        ytDlpWrap = new YTDlpWrap(process.env.YT_DLP_PATH);
-        return ytDlpWrap;
+        return new YTDlpWrap(process.env.YT_DLP_PATH);
+    }
+
+    if (os.platform() === 'darwin') {
+        return setupMacYtDlp();
     }
 
     if (!fs.existsSync(YT_DLP_BIN)) {
@@ -100,19 +108,134 @@ async function ensureYtDlp() {
         await downloadYtDlpBinary(YT_DLP_BIN);
     }
 
-    ytDlpWrap = new YTDlpWrap(YT_DLP_BIN);
-    return ytDlpWrap;
+    const ytdl = new YTDlpWrap(YT_DLP_BIN);
+
+    // YouTube breaks old yt-dlp builds (HTTP 403), so self-update the bundled binary.
+    // ponytail: once per bot start; a bot left running for months needs a restart to update.
+    try {
+        console.log(await ytdl.execPromise(['-U']));
+    } catch (error) {
+        console.warn('yt-dlp self-update failed, using current version:', error.message);
+    }
+
+    return ytdl;
 }
 
-async function resolveVideo(query) {
+// YouTube breaks old yt-dlp builds (HTTP 403), so install the latest release whenever it differs
+// from what's installed. ponytail: checked once per bot start, like the -U path on other platforms.
+async function setupMacYtDlp() {
+    const installed = fs.existsSync(MAC_EXE)
+        ? await execFileAsync(MAC_EXE, ['--version']).then(({ stdout }) => stdout.trim(), () => null)
+        : null;
+
+    try {
+        const [{ tag_name: latest }] = await YTDlpWrap.getGithubReleases(1, 1);
+
+        if (installed === latest) {
+            console.log(`yt-dlp is up to date (${installed})`);
+        } else {
+            console.log(installed ? `Updating yt-dlp ${installed} -> ${latest}...` : 'Downloading yt-dlp (first run only)...');
+
+            const zip = `${MAC_DIR}.zip`;
+            const tmp = `${MAC_DIR}.new`;
+
+            // Download and unpack beside the current copy, then swap, so a failure leaves it untouched.
+            fs.mkdirSync(BIN_DIR, { recursive: true });
+            fs.rmSync(tmp, { recursive: true, force: true });
+            await downloadFile(`https://github.com/yt-dlp/yt-dlp/releases/download/${latest}/yt-dlp_macos.zip`, zip);
+            await execFileAsync('ditto', ['-x', '-k', zip, tmp]);
+            fs.rmSync(MAC_DIR, { recursive: true, force: true });
+            fs.renameSync(tmp, MAC_DIR);
+            fs.rmSync(zip);
+            console.log(`yt-dlp ${latest} installed`);
+        }
+    } catch (error) {
+        if (!installed) {
+            throw error;
+        }
+
+        console.warn('yt-dlp update check failed, using current version:', error.message);
+    }
+
+    return new YTDlpWrap(MAC_EXE);
+}
+
+// Cache the promise so concurrent first plays don't download/update the binary twice.
+function ensureYtDlp() {
+    ytDlpReady ??= setupYtDlp().catch((error) => {
+        ytDlpReady = null;
+        throw error;
+    });
+
+    return ytDlpReady;
+}
+
+// Every yt-dlp call that talks to YouTube must include this. Without a JS runtime yt-dlp falls back
+// to a deprecated YouTube client that gets 403s and is missing formats.
+const JS_RUNTIME_ARGS = ['--js-runtimes', `node:${process.execPath}`];
+
+// A single video, audio only.
+const YT_DLP_ARGS = [
+    ...JS_RUNTIME_ARGS,
+    '--no-playlist',
+    '-f',
+    'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best',
+];
+
+// ponytail: a 25-song Mix takes ~8 s to look up; raise this if you want longer playlists queued.
+const PLAYLIST_LIMIT = 25;
+
+// Returns the songs from the clicked video onward, or [] if the list can't be read (private/invalid).
+async function resolvePlaylist(ytdl, query, url) {
+    const videoId = url.searchParams.get('v') ?? (url.hostname.endsWith('youtu.be') ? url.pathname.slice(1) : null);
+    const index = Math.max(Number.parseInt(url.searchParams.get('index'), 10) || 1, 1);
+
+    const playlist = JSON.parse(await ytdl.execPromise([
+        query,
+        ...JS_RUNTIME_ARGS,
+        '--flat-playlist',
+        '-J',
+        '-I',
+        `1:${index + PLAYLIST_LIMIT - 1}`,
+    ]));
+
+    // No entries means yt-dlp could not read the list and returned the single video instead.
+    const entries = playlist.entries ?? [];
+
+    // Normal playlists keep the clicked video at index=, but YouTube Mixes move it to #1,
+    // so start wherever v= actually is and only fall back to index=.
+    const found = entries.findIndex((entry) => entry.id === videoId);
+    const start = found >= 0 ? found : index - 1;
+
+    return entries.slice(start, start + PLAYLIST_LIMIT).map((entry) => ({
+        title: entry.title,
+        url: entry.url ?? `https://www.youtube.com/watch?v=${entry.id}`,
+        durationSec: entry.duration,
+    }));
+}
+
+// Returns an array: one song, or the rest of a playlist when the link has list=.
+async function resolveSongs(query) {
     if (isYouTubeUrl(query)) {
         const ytdl = await ensureYtDlp();
-        const metadata = await ytdl.getVideoInfo(query);
+        const url = new URL(/^https?:\/\//i.test(query) ? query : `https://${query}`);
 
-        return {
+        if (url.searchParams.has('list')) {
+            const songs = await resolvePlaylist(ytdl, query, url);
+
+            if (songs.length > 0) {
+                return songs;
+            }
+        }
+
+        // Passing our own -f also stops yt-dlp-wrap adding "-f best", which YouTube rarely offers.
+        const metadata = await ytdl.getVideoInfo([query, ...YT_DLP_ARGS]);
+
+        return [{
             title: metadata.title,
             url: metadata.webpage_url || query,
-        };
+            durationSec: metadata.duration, // undefined for live streams
+        }];
     }
 
     const result = await ytSearch(query);
@@ -123,10 +246,11 @@ async function resolveVideo(query) {
 
     const video = result.videos[0];
 
-    return {
+    return [{
         title: video.title,
         url: video.url,
-    };
+        durationSec: video.seconds, // 0 for live streams
+    }];
 }
 
 function detectFfmpegInputFormat(buffer) {
@@ -175,18 +299,20 @@ function spawnFfmpeg(inputFormat) {
     );
 }
 
+// yt-dlp-wrap's execStream destroys its buffered audio the moment yt-dlp exits, which cut songs off
+// minutes in. Spawn yt-dlp directly and give it a big buffer so it still downloads at full speed.
+// ponytail: 64 MB (~1h of audio); longer tracks make yt-dlp wait on playback instead.
+const YT_DLP_BUFFER_BYTES = 64 * 1024 * 1024;
+
 function createAudioStream(videoUrl) {
     const ytdlPromise = ensureYtDlp();
 
     return ytdlPromise.then((ytdl) => {
-        const ytDlpStream = ytdl.execStream([
+        const ytDlp = spawn(ytdl.getBinaryPath(), [
             videoUrl,
-            '-f',
-            'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best',
+            ...YT_DLP_ARGS,
             '-o',
             '-',
-            '--no-playlist',
-            '--no-warnings',
             '--retries',
             '10',
             '--fragment-retries',
@@ -194,6 +320,12 @@ function createAudioStream(videoUrl) {
             '--socket-timeout',
             '30',
         ]);
+        const ytDlpStream = ytDlp.stdout.pipe(new PassThrough({ highWaterMark: YT_DLP_BUFFER_BYTES }));
+
+        let ytDlpLog = '';
+        ytDlp.stderr.on('data', (data) => {
+            ytDlpLog += data.toString();
+        });
 
         return new Promise((resolve, reject) => {
             let buffered = Buffer.alloc(0);
@@ -206,7 +338,7 @@ function createAudioStream(videoUrl) {
                 }
 
                 settled = true;
-                ytDlpStream.destroy();
+                ytDlp.kill('SIGKILL');
                 ffmpeg?.kill('SIGKILL');
                 reject(error);
             };
@@ -235,6 +367,8 @@ function createAudioStream(videoUrl) {
                 });
 
                 ffmpeg.on('close', (code) => {
+                    ytDlp.kill(); // stop downloading once the song ends or is skipped
+
                     if (code != null && code !== 0) {
                         console.error('ffmpeg exited with code', code, ffmpegLog.slice(-500));
                     }
@@ -242,23 +376,6 @@ function createAudioStream(videoUrl) {
 
                 ffmpeg.stdin.on('error', () => {
                     // Ignore EPIPE when the stream ends naturally.
-                });
-
-                ytDlpStream.on('error', (error) => {
-                    if (error.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
-                        console.error('yt-dlp stream error:', error);
-                    }
-                });
-
-                let ytDlpLog = '';
-                ytDlpStream.stderr?.on('data', (data) => {
-                    ytDlpLog += data.toString();
-                });
-
-                ytDlpStream.on('close', (code) => {
-                    if (code != null && code !== 0) {
-                        console.error('yt-dlp exited with code', code, ytDlpLog.slice(-500));
-                    }
                 });
 
                 ffmpeg.stdin.write(buffered);
@@ -272,10 +389,12 @@ function createAudioStream(videoUrl) {
             };
 
             ytDlpStream.on('data', onData);
-            ytDlpStream.on('error', fail);
-            ytDlpStream.on('close', (code) => {
+            ytDlp.on('error', fail);
+            ytDlp.on('close', (code) => {
                 if (!settled) {
-                    fail(new Error(`yt-dlp closed before audio data was ready (code: ${code})`));
+                    fail(new Error(`yt-dlp closed before audio data was ready (code: ${code}) ${ytDlpLog.slice(-500)}`));
+                } else if (code != null && code !== 0) {
+                    console.error('yt-dlp exited with code', code, ytDlpLog.slice(-500));
                 }
             });
         });
@@ -285,5 +404,5 @@ function createAudioStream(videoUrl) {
 module.exports = {
     createAudioStream,
     isYouTubeUrl,
-    resolveVideo,
+    resolveSongs,
 };

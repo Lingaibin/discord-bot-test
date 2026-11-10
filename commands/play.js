@@ -2,8 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { getVoiceConnection } = require('@discordjs/voice');
 
 const musicManager = require('../musicManager');
-const { player } = musicManager;
-const { resolveVideo } = require('../utils/youtube');
+const { resolveSongs } = require('../utils/youtube');
 const { connectToChannel } = require('../utils/voice');
 
 module.exports = {
@@ -34,30 +33,39 @@ module.exports = {
 
         await interaction.deferReply();
 
+        const wasConnected = Boolean(getVoiceConnection(interaction.guild.id));
+
         try {
+            // Resolve first so a bad query never touches the voice connection.
+            const songs = await resolveSongs(query);
+
             const connection = connectToChannel(channel);
-            connection.subscribe(player);
+            connection.subscribe(musicManager.getPlayer(interaction.guild.id));
 
-            const { title, url } = await resolveVideo(query);
-
-            const startedPlaying = await musicManager.addSong({
-                title,
-                url,
+            const startedPlaying = await musicManager.addSongs(songs.map((song) => ({
+                ...song,
                 guildId: interaction.guild.id,
                 requestedBy: interaction.user.username,
-            });
+            })), interaction.channel);
 
-            const statusMessage = startedPlaying
-                ? `🎶 Queued and starting\n**${title}**`
-                : `➕ Added To Queue\n**${title}**`;
+            const { title, url } = songs[0];
+            let header;
 
-            await interaction.editReply(statusMessage);
+            if (songs.length > 1) {
+                header = startedPlaying
+                    ? `🎶 Queued ${songs.length} songs from the playlist, starting with`
+                    : `➕ Added ${songs.length} songs from the playlist to the queue, beginning with`;
+            } else {
+                header = startedPlaying ? '🎶 Queued and starting' : '➕ Added To Queue';
+            }
+
+            await interaction.editReply(`${header}\n**${title}**\n${url}`);
         } catch (error) {
             console.error(error);
 
-            const existing = getVoiceConnection(interaction.guild.id);
-            if (existing) {
-                existing.destroy();
+            // Only tear down a connection this command created; never kill existing playback.
+            if (!wasConnected) {
+                getVoiceConnection(interaction.guild.id)?.destroy();
             }
 
             let message = 'Failed to play the requested song.';

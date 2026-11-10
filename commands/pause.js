@@ -11,7 +11,7 @@ module.exports = {
         .setDescription('Pause the current song'),
 
     async execute(interaction) {
-        const paused = musicManager.pause();
+        const paused = musicManager.pause(interaction.guild.id);
 
         if (!paused) {
             return interaction.reply({

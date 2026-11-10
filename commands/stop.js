@@ -24,7 +24,7 @@ module.exports = {
             });
         }
 
-        musicManager.clear();
+        musicManager.clear(interaction.guild.id);
         clearAutoLeaveTimer(interaction.guild.id);
         connection.destroy();
 
